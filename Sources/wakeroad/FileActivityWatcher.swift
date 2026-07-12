@@ -1,0 +1,87 @@
+import CoreServices
+import Foundation
+
+/// Watches directory trees with a single FSEventStream and reports writes to
+/// `.jsonl` files. Events are delivered on the queue passed to `init`.
+final class FileActivityWatcher {
+    enum WatcherError: Error, CustomStringConvertible {
+        case streamCreationFailed
+        case streamStartFailed
+
+        var description: String {
+            switch self {
+            case .streamCreationFailed: return "failed to create FSEventStream"
+            case .streamStartFailed: return "failed to start FSEventStream"
+            }
+        }
+    }
+
+    private let roots: [String]
+    private let queue: DispatchQueue
+    private let onEvent: (String) -> Void
+    private var stream: FSEventStreamRef?
+
+    init(roots: [String], queue: DispatchQueue, onEvent: @escaping (String) -> Void) {
+        self.roots = roots
+        self.queue = queue
+        self.onEvent = onEvent
+    }
+
+    func start() throws {
+        var context = FSEventStreamContext(
+            version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil,
+            release: nil,
+            copyDescription: nil
+        )
+
+        let callback: FSEventStreamCallback = { _, info, numEvents, eventPaths, _, _ in
+            guard let info else { return }
+            let watcher = Unmanaged<FileActivityWatcher>.fromOpaque(info).takeUnretainedValue()
+            // kFSEventStreamCreateFlagUseCFTypes makes eventPaths a CFArray of CFString.
+            let paths = unsafeBitCast(eventPaths, to: NSArray.self)
+            for index in 0..<numEvents {
+                guard let path = paths[index] as? String, path.hasSuffix(".jsonl") else { continue }
+                watcher.onEvent(path)
+            }
+        }
+
+        let flags = UInt32(
+            kFSEventStreamCreateFlagFileEvents
+                | kFSEventStreamCreateFlagUseCFTypes
+                | kFSEventStreamCreateFlagNoDefer
+        )
+        guard let stream = FSEventStreamCreate(
+            kCFAllocatorDefault,
+            callback,
+            &context,
+            roots as CFArray,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+            1.5,
+            flags
+        ) else {
+            throw WatcherError.streamCreationFailed
+        }
+
+        FSEventStreamSetDispatchQueue(stream, queue)
+        guard FSEventStreamStart(stream) else {
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            throw WatcherError.streamStartFailed
+        }
+        self.stream = stream
+    }
+
+    func stop() {
+        guard let stream else { return }
+        FSEventStreamStop(stream)
+        FSEventStreamInvalidate(stream)
+        FSEventStreamRelease(stream)
+        self.stream = nil
+    }
+
+    deinit {
+        stop()
+    }
+}
