@@ -3,12 +3,12 @@ import Foundation
 
 /// Watches directory trees with a single FSEventStream and reports writes to
 /// `.jsonl` files. Events are delivered on the queue passed to `init`.
-final class FileActivityWatcher {
-    enum WatcherError: Error, CustomStringConvertible {
+public final class FileActivityWatcher {
+    public enum WatcherError: Error, CustomStringConvertible {
         case streamCreationFailed
         case streamStartFailed
 
-        var description: String {
+        public var description: String {
             switch self {
             case .streamCreationFailed: return "failed to create FSEventStream"
             case .streamStartFailed: return "failed to start FSEventStream"
@@ -21,13 +21,13 @@ final class FileActivityWatcher {
     private let onEvent: (String) -> Void
     private var stream: FSEventStreamRef?
 
-    init(roots: [String], queue: DispatchQueue, onEvent: @escaping (String) -> Void) {
+    public init(roots: [String], queue: DispatchQueue, onEvent: @escaping (String) -> Void) {
         self.roots = roots
         self.queue = queue
         self.onEvent = onEvent
     }
 
-    func start() throws {
+    public func start() throws {
         var context = FSEventStreamContext(
             version: 0,
             info: Unmanaged.passUnretained(self).toOpaque(),
@@ -73,7 +73,7 @@ final class FileActivityWatcher {
         self.stream = stream
     }
 
-    func stop() {
+    public func stop() {
         guard let stream else { return }
         FSEventStreamStop(stream)
         FSEventStreamInvalidate(stream)

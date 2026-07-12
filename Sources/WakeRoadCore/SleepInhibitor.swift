@@ -3,8 +3,10 @@ import IOKit.pwr_mgt
 
 /// Wraps an IOKit power assertion. The kernel automatically releases the
 /// assertion if the process dies, so a crash can never leave sleep inhibited.
-final class SleepInhibitor {
-    enum Kind {
+/// Not internally synchronized: all calls must happen on one queue
+/// (`@unchecked Sendable` so a reference can be handed to that queue).
+public final class SleepInhibitor: @unchecked Sendable {
+    public enum Kind: Equatable, Sendable {
         /// Prevents idle system sleep; the display may still turn off.
         case system
         /// Prevents idle display sleep (implies keeping the system awake).
@@ -22,16 +24,18 @@ final class SleepInhibitor {
 
     private static let assertionName = "wakeroad: AI agent activity detected"
 
-    private let kind: Kind
+    public private(set) var kind: Kind
+    private let log: LogHandler
     private var assertionID: IOPMAssertionID?
 
-    init(kind: Kind) {
+    public init(kind: Kind, log: @escaping LogHandler = { _ in }) {
         self.kind = kind
+        self.log = log
     }
 
     /// Acquires the assertion. Idempotent: a second call while held is a no-op.
     @discardableResult
-    func acquire() -> Bool {
+    public func acquire() -> Bool {
         guard assertionID == nil else { return true }
 
         var id = IOPMAssertionID(0)
@@ -50,13 +54,23 @@ final class SleepInhibitor {
     }
 
     /// Releases the assertion. Idempotent: releasing while not held is a no-op.
-    func release() {
+    public func release() {
         guard let id = assertionID else { return }
         IOPMAssertionRelease(id)
         assertionID = nil
     }
 
-    var isHeld: Bool {
+    /// Switches the assertion kind. If the assertion is currently held it is
+    /// released and re-acquired with the new kind.
+    public func setKind(_ newKind: Kind) {
+        guard newKind != kind else { return }
+        let wasHeld = assertionID != nil
+        if wasHeld { release() }
+        kind = newKind
+        if wasHeld { acquire() }
+    }
+
+    public var isHeld: Bool {
         assertionID != nil
     }
 

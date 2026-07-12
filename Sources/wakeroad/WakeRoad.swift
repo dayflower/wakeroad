@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import WakeRoadCore
 
 private let logDateFormatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -7,7 +8,7 @@ private let logDateFormatter: DateFormatter = {
     return formatter
 }()
 
-func log(_ message: String) {
+@Sendable func log(_ message: String) {
     print("[\(logDateFormatter.string(from: Date()))] \(message)")
     fflush(stdout)
 }
@@ -53,33 +54,18 @@ struct Run: ParsableCommand {
     }
 
     func run() throws {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        var roots = [
-            home + "/.claude/projects",
-            home + "/.codex/sessions",
-        ]
-        roots += watch.map { NSString(string: $0).expandingTildeInPath }
-
-        let fileManager = FileManager.default
-        let watchRoots = roots.filter { root in
-            var isDirectory: ObjCBool = false
-            let exists = fileManager.fileExists(atPath: root, isDirectory: &isDirectory)
-            guard exists, isDirectory.boolValue else {
-                log("skipping watch root (not found): \(abbreviatingHome(root))")
-                return false
-            }
-            return true
-        }
+        let watchRoots = WatchRoots.resolve(extra: watch, log: log)
         guard !watchRoots.isEmpty else {
             throw ValidationError("None of the watch roots exist; nothing to watch.")
         }
 
         let queue = DispatchQueue(label: "com.github.dayflower.wakeroad")
-        let inhibitor = SleepInhibitor(kind: display ? .display : .system)
+        let inhibitor = SleepInhibitor(kind: display ? .display : .system, log: log)
         let monitor = ActivityMonitor(
             timeout: TimeInterval(timeout),
             inhibitor: inhibitor,
-            queue: queue
+            queue: queue,
+            log: log
         )
 
         let verbose = self.verbose

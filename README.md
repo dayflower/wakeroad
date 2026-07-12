@@ -10,6 +10,9 @@ happening. When no transcript has been written for a configurable timeout
 No configuration on the agent side (hooks, notify scripts, etc.) is required —
 `wakeroad` works standalone, purely by observing file activity.
 
+It comes in two flavors sharing the same core: a foreground CLI (`wakeroad`)
+and a menu bar app (`WakeRoad.app`, see [Menu bar app](#menu-bar-app-gui)).
+
 ## How it works
 
 - Watches the following directory trees with a single FSEvents stream:
@@ -57,6 +60,44 @@ You can check the assertion state at any time with:
 ```console
 $ pmset -g assertions | grep wakeroad
 ```
+
+## Menu bar app (GUI)
+
+WakeRoad also ships as a menu bar app that runs the same watcher in the
+background, with no terminal required. The icon shows the current state
+(bolt filled while sleep is inhibited), and the menu lets you:
+
+- Pause / resume watching (pausing releases the assertion immediately)
+- Change the idle timeout (1 / 5 / 15 / 30 min)
+- Toggle "Keep Display Awake" (the `--display` equivalent)
+- Toggle "Launch at Login"
+
+### Build and install
+
+```console
+$ ./scripts/make-app.sh
+$ cp -R dist/WakeRoad.app /Applications/
+```
+
+The bundle is ad-hoc signed; it is meant for building on your own machine,
+not for distribution. "Launch at Login" uses `SMAppService`, which only works
+when the app is launched from a proper `.app` bundle — run it from
+`/Applications` (or wherever you copied it), not via `swift run WakeRoadApp`.
+
+### Settings
+
+Settings are stored in `UserDefaults` under the
+`com.github.dayflower.wakeroad` domain. There is no UI for additional watch
+directories (the `--watch` equivalent) yet, but you can set them directly:
+
+```console
+$ defaults write com.github.dayflower.wakeroad extraWatchRoots -array ~/some/dir
+```
+
+The change takes effect the next time the app starts.
+
+Running the CLI and the GUI at the same time is harmless: assertions are
+per-process, so both simply hold one while active.
 
 ## Limitations
 
