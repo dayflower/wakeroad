@@ -168,7 +168,7 @@ final class AppController: ObservableObject {
 
     var lastTriggerLine: String? {
         guard let trigger = status.lastTrigger else { return nil }
-        var line = "last: " + Self.compactPath(trigger)
+        var line = "last: " + Self.agentName(for: trigger)
         if let date = status.lastActivity {
             line += " (" + Self.timeFormatter.string(from: date) + ")"
         }
@@ -181,12 +181,12 @@ final class AppController: ObservableObject {
         return formatter
     }()
 
-    /// Shortens long transcript paths for menu display, e.g.
-    /// `~/.claude/projects/…/session.jsonl`.
-    private static func compactPath(_ path: String) -> String {
-        let abbreviated = abbreviatingHome(path)
-        let parts = abbreviated.split(separator: "/")
-        guard parts.count > 4, let last = parts.last else { return abbreviated }
-        return parts.prefix(3).joined(separator: "/") + "/…/" + last
+    /// Maps a transcript path to the agent that wrote it; falls back to the
+    /// containing directory name for extra watch roots.
+    private static func agentName(for path: String) -> String {
+        if path.contains("/.claude/") { return "Claude Code" }
+        if path.contains("/.codex/") { return "Codex" }
+        let directory = (abbreviatingHome(path) as NSString).deletingLastPathComponent
+        return directory.isEmpty ? path : directory
     }
 }
