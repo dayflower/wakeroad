@@ -59,37 +59,26 @@ struct Run: ParsableCommand {
             throw ValidationError("None of the watch roots exist; nothing to watch.")
         }
 
-        let queue = DispatchQueue(label: "com.github.dayflower.wakeroad")
-        let inhibitor = SleepInhibitor(kind: display ? .display : .system, log: log)
-        let monitor = ActivityMonitor(
+        let onFileEvent: ((String) -> Void)? = verbose
+            ? { path in log("write: \(abbreviatingHome(path))") }
+            : nil
+        let session = WakeRoadSession(configuration: .init(
+            roots: watchRoots,
             timeout: TimeInterval(timeout),
-            inhibitor: inhibitor,
-            queue: queue,
-            log: log
-        )
-
-        let verbose = self.verbose
-        let watcher = FileActivityWatcher(roots: watchRoots, queue: queue) { path in
-            if verbose {
-                log("write: \(abbreviatingHome(path))")
-            }
-            monitor.recordActivity(path: path)
-        }
+            kind: display ? .display : .system,
+            log: log,
+            onFileEvent: onFileEvent
+        ))
 
         for root in watchRoots {
             log("watching \(abbreviatingHome(root))")
         }
         log("idle timeout: \(timeout)s, assertion: \(display ? "system+display" : "system") sleep")
 
-        monitor.bootstrap(latestWrite: TranscriptScanner.latestWrite(in: watchRoots))
-        monitor.start()
-        try watcher.start()
+        try session.start()
 
         let shutdown = {
-            queue.sync {
-                watcher.stop()
-                monitor.stop()
-            }
+            session.stop()
             WakeRoad.exit()
         }
         signal(SIGINT, SIG_IGN)
@@ -101,7 +90,7 @@ struct Run: ParsableCommand {
         sigtermSource.setEventHandler(handler: shutdown)
         sigtermSource.resume()
 
-        withExtendedLifetime((watcher, monitor, sigintSource, sigtermSource)) {
+        withExtendedLifetime((session, sigintSource, sigtermSource)) {
             dispatchMain()
         }
     }

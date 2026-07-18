@@ -142,6 +142,7 @@ final class ActivityMonitorTests: XCTestCase {
 
         XCTAssertFalse(inhibitor.isHeld)
         XCTAssertEqual(statuses.last?.isActive, false)
+        XCTAssertEqual(statuses.last?.isSuspended, true)
     }
 
     func testSuspendWhileIdleStillNotifies() {
@@ -151,6 +152,7 @@ final class ActivityMonitorTests: XCTestCase {
         XCTAssertEqual(inhibitor.releaseCount, 0)
         XCTAssertEqual(statuses.count, 1)
         XCTAssertEqual(statuses.last?.isActive, false)
+        XCTAssertEqual(statuses.last?.isSuspended, true)
     }
 
     func testActivityWhileSuspendedIsIgnored() {
@@ -168,6 +170,7 @@ final class ActivityMonitorTests: XCTestCase {
         monitor.suspend()
         monitor.resume()
         XCTAssertFalse(inhibitor.isHeld)
+        XCTAssertEqual(statuses.last?.isSuspended, false)
 
         monitor.recordActivity(path: "/tmp/b.jsonl")
         XCTAssertTrue(inhibitor.isHeld)

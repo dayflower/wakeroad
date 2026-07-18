@@ -3,11 +3,18 @@ import Foundation
 /// Snapshot of the monitor state, delivered via `ActivityMonitor.onStatusChange`.
 public struct MonitorStatus: Sendable {
     public var isActive: Bool
+    public var isSuspended: Bool
     public var lastActivity: Date?
     public var lastTrigger: String?
 
-    public init(isActive: Bool = false, lastActivity: Date? = nil, lastTrigger: String? = nil) {
+    public init(
+        isActive: Bool = false,
+        isSuspended: Bool = false,
+        lastActivity: Date? = nil,
+        lastTrigger: String? = nil
+    ) {
         self.isActive = isActive
+        self.isSuspended = isSuspended
         self.lastActivity = lastActivity
         self.lastTrigger = lastTrigger
     }
@@ -140,6 +147,7 @@ public final class ActivityMonitor: @unchecked Sendable {
     private func notifyStatus() {
         onStatusChange?(MonitorStatus(
             isActive: state == .active,
+            isSuspended: suspended,
             lastActivity: lastActivity == .distantPast ? nil : lastActivity,
             lastTrigger: lastTrigger
         ))

@@ -7,9 +7,9 @@ import os
 private let coreLogger = Logger(subsystem: "com.github.dayflower.wakeroad", category: "core")
 private let appLogger = Logger(subsystem: "com.github.dayflower.wakeroad", category: "app")
 
-/// Bridges WakeRoadCore to the SwiftUI menu: wires up the watcher/monitor on
-/// launch, republishes monitor status on the main actor, and pushes setting
-/// changes back onto the monitor queue.
+/// Bridges WakeRoadCore to the SwiftUI menu: starts a `WakeRoadSession` on
+/// launch, republishes monitor status on the main actor, and forwards setting
+/// changes to the session.
 @MainActor
 final class AppController: ObservableObject {
     private enum DefaultsKey {
@@ -19,7 +19,6 @@ final class AppController: ObservableObject {
     }
 
     @Published private(set) var status = MonitorStatus()
-    @Published private(set) var isPaused = false
     @Published private(set) var launchAtLogin = false
     @Published private(set) var startupError: String?
 
@@ -27,10 +26,7 @@ final class AppController: ObservableObject {
         didSet {
             guard timeoutMinutes != oldValue else { return }
             UserDefaults.standard.set(timeoutMinutes, forKey: DefaultsKey.timeoutMinutes)
-            let seconds = TimeInterval(timeoutMinutes * 60)
-            if let monitor {
-                queue.async { monitor.timeout = seconds }
-            }
+            session?.setTimeout(timeoutSeconds)
         }
     }
 
@@ -38,18 +34,16 @@ final class AppController: ObservableObject {
         didSet {
             guard keepDisplayAwake != oldValue else { return }
             UserDefaults.standard.set(keepDisplayAwake, forKey: DefaultsKey.keepDisplayAwake)
-            let kind: SleepInhibitor.Kind = keepDisplayAwake ? .display : .system
-            if let inhibitor {
-                queue.async { inhibitor.setKind(kind) }
-            }
+            session?.setKind(keepDisplayAwake ? .display : .system)
         }
     }
 
-    private let queue = DispatchQueue(label: "com.github.dayflower.wakeroad.app")
-    private var inhibitor: SleepInhibitor?
-    private var monitor: ActivityMonitor?
-    private var watcher: FileActivityWatcher?
+    var isPaused: Bool { status.isSuspended }
+
+    private var session: WakeRoadSession?
     private var terminationObserver: NSObjectProtocol?
+
+    private var timeoutSeconds: TimeInterval { TimeInterval(timeoutMinutes * 60) }
 
     init() {
         let defaults = UserDefaults.standard
@@ -87,47 +81,32 @@ final class AppController: ObservableObject {
             return
         }
 
-        let inhibitor = SleepInhibitor(kind: keepDisplayAwake ? .display : .system, log: log)
-        let monitor = ActivityMonitor(
-            timeout: TimeInterval(timeoutMinutes * 60),
-            inhibitor: inhibitor,
-            queue: queue,
+        let session = WakeRoadSession(configuration: .init(
+            roots: roots,
+            timeout: timeoutSeconds,
+            kind: keepDisplayAwake ? .display : .system,
             log: log
-        )
-        monitor.onStatusChange = { [weak self] status in
+        ))
+        session.onStatusChange = { [weak self] status in
             Task { @MainActor in
                 self?.status = status
             }
         }
-        let watcher = FileActivityWatcher(roots: roots, queue: queue) { path in
-            monitor.recordActivity(path: path)
-        }
-
-        monitor.bootstrap(latestWrite: TranscriptScanner.latestWrite(in: roots))
-        monitor.start()
         do {
-            try watcher.start()
+            try session.start()
         } catch {
-            queue.sync { monitor.stop() }
             startupError = "Failed to start file watcher: \(error)"
             return
         }
-
-        self.inhibitor = inhibitor
-        self.monitor = monitor
-        self.watcher = watcher
+        self.session = session
     }
 
     func togglePause() {
-        guard let monitor else { return }
-        isPaused.toggle()
-        let paused = isPaused
-        queue.async {
-            if paused {
-                monitor.suspend()
-            } else {
-                monitor.resume()
-            }
+        guard let session else { return }
+        if status.isSuspended {
+            session.resume()
+        } else {
+            session.suspend()
         }
     }
 
@@ -144,25 +123,20 @@ final class AppController: ObservableObject {
     }
 
     private func shutdown() {
-        guard let monitor, let watcher else { return }
-        queue.sync {
-            watcher.stop()
-            monitor.stop()
-        }
-        self.monitor = nil
-        self.watcher = nil
+        session?.stop()
+        session = nil
     }
 
     // MARK: - Presentation
 
     var iconName: String {
         if startupError != nil { return "exclamationmark.triangle" }
-        if isPaused { return "pause.circle" }
+        if status.isSuspended { return "pause.circle" }
         return status.isActive ? "bolt.horizontal.circle.fill" : "bolt.horizontal.circle"
     }
 
     var statusLine: String {
-        if isPaused { return "⏸ Paused" }
+        if status.isSuspended { return "⏸ Paused" }
         return status.isActive ? "● Active — inhibiting sleep" : "○ Idle"
     }
 
