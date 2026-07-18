@@ -1,11 +1,21 @@
 import Foundation
 import IOKit.pwr_mgt
 
+/// The subset of `SleepInhibitor` the monitor depends on, so the monitor can
+/// be tested without touching IOKit.
+public protocol SleepInhibiting: AnyObject {
+    /// Acquires the assertion. Returns false if acquisition failed.
+    @discardableResult
+    func acquire() -> Bool
+    /// Releases the assertion. Releasing while not held is a no-op.
+    func release()
+}
+
 /// Wraps an IOKit power assertion. The kernel automatically releases the
 /// assertion if the process dies, so a crash can never leave sleep inhibited.
 /// Not internally synchronized: all calls must happen on one queue
 /// (`@unchecked Sendable` so a reference can be handed to that queue).
-public final class SleepInhibitor: @unchecked Sendable {
+public final class SleepInhibitor: SleepInhibiting, @unchecked Sendable {
     public enum Kind: Equatable, Sendable {
         /// Prevents idle system sleep; the display may still turn off.
         case system

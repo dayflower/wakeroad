@@ -103,7 +103,7 @@ final class AppController: ObservableObject {
             monitor.recordActivity(path: path)
         }
 
-        monitor.bootstrap(roots: roots)
+        monitor.bootstrap(latestWrite: TranscriptScanner.latestWrite(in: roots))
         monitor.start()
         do {
             try watcher.start()

@@ -81,7 +81,7 @@ struct Run: ParsableCommand {
         }
         log("idle timeout: \(timeout)s, assertion: \(display ? "system+display" : "system") sleep")
 
-        monitor.bootstrap(roots: watchRoots)
+        monitor.bootstrap(latestWrite: TranscriptScanner.latestWrite(in: watchRoots))
         monitor.start()
         try watcher.start()
 

@@ -29,9 +29,10 @@ public final class ActivityMonitor: @unchecked Sendable {
     /// responsible for hopping to its own actor/queue.
     public var onStatusChange: ((MonitorStatus) -> Void)?
 
-    private let inhibitor: SleepInhibitor
+    private let inhibitor: SleepInhibiting
     private let queue: DispatchQueue
     private let log: LogHandler
+    private let now: @Sendable () -> Date
     private var state: State = .idle
     private var suspended = false
     private var lastActivity: Date = .distantPast
@@ -40,42 +41,26 @@ public final class ActivityMonitor: @unchecked Sendable {
 
     public init(
         timeout: TimeInterval,
-        inhibitor: SleepInhibitor,
+        inhibitor: SleepInhibiting,
         queue: DispatchQueue,
-        log: @escaping LogHandler = { _ in }
+        log: @escaping LogHandler = { _ in },
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.timeout = timeout
         self.inhibitor = inhibitor
         self.queue = queue
         self.log = log
+        self.now = now
     }
 
-    /// Scans the watch roots for the most recently modified `.jsonl` file and
-    /// starts in the active state if it was written within the timeout window,
-    /// so sessions already running before launch are picked up.
-    public func bootstrap(roots: [String]) {
-        var latest: (path: String, date: Date)?
-        for root in roots {
-            let rootURL = URL(fileURLWithPath: root)
-            guard let enumerator = FileManager.default.enumerator(
-                at: rootURL,
-                includingPropertiesForKeys: [.contentModificationDateKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
-            for case let fileURL as URL in enumerator {
-                guard fileURL.pathExtension == "jsonl",
-                      let date = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
-                          .contentModificationDate
-                else { continue }
-                if latest == nil || date > latest!.date {
-                    latest = (fileURL.path, date)
-                }
-            }
-        }
-
-        guard let latest, Date().timeIntervalSince(latest.date) <= timeout else { return }
-        lastActivity = latest.date
-        becomeActive(trigger: latest.path)
+    /// Seeds the monitor with the result of a pre-launch scan (see
+    /// `TranscriptScanner.latestWrite(in:)`) and starts in the active state if
+    /// the write happened within the timeout window, so sessions already
+    /// running before launch are picked up.
+    public func bootstrap(latestWrite: TranscriptWrite?) {
+        guard let latestWrite, now().timeIntervalSince(latestWrite.date) <= timeout else { return }
+        lastActivity = latestWrite.date
+        becomeActive(trigger: latestWrite.path)
     }
 
     public func start() {
@@ -90,7 +75,7 @@ public final class ActivityMonitor: @unchecked Sendable {
 
     public func recordActivity(path: String) {
         guard !suspended else { return }
-        lastActivity = Date()
+        lastActivity = now()
         if state == .idle {
             becomeActive(trigger: path)
         } else {
@@ -105,11 +90,10 @@ public final class ActivityMonitor: @unchecked Sendable {
         guard !suspended else { return }
         suspended = true
         if state == .active {
-            inhibitor.release()
-            state = .idle
-            log("released sleep assertion (paused)")
+            becomeIdle(reason: "released sleep assertion (paused)")
+        } else {
+            notifyStatus()
         }
-        notifyStatus()
     }
 
     /// Re-enables event handling. The assertion is re-acquired on the next
@@ -125,20 +109,23 @@ public final class ActivityMonitor: @unchecked Sendable {
         timer?.cancel()
         timer = nil
         if state == .active {
-            inhibitor.release()
-            state = .idle
-            log("released sleep assertion (shutting down)")
-            notifyStatus()
+            becomeIdle(reason: "released sleep assertion (shutting down)")
         }
     }
 
-    private func checkIdle() {
+    /// Internal (not private) so tests can drive the idle check directly
+    /// instead of waiting for the timer.
+    func checkIdle() {
         guard state == .active else { return }
-        let elapsed = Date().timeIntervalSince(lastActivity)
+        let elapsed = now().timeIntervalSince(lastActivity)
         guard elapsed > timeout else { return }
+        becomeIdle(reason: "idle (no writes for \(Int(elapsed))s)")
+    }
+
+    private func becomeIdle(reason: String) {
         inhibitor.release()
         state = .idle
-        log("idle (no writes for \(Int(elapsed))s)")
+        log(reason)
         notifyStatus()
     }
 

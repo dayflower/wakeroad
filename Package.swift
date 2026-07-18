@@ -26,5 +26,9 @@ let package = Package(
             name: "WakeRoadApp",
             dependencies: ["WakeRoadCore"]
         ),
+        .testTarget(
+            name: "WakeRoadCoreTests",
+            dependencies: ["WakeRoadCore"]
+        ),
     ]
 )
