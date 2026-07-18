@@ -25,6 +25,9 @@ public struct MonitorStatus: Sendable {
 /// happen on `queue` (or before the watcher/timer start delivering events);
 /// `@unchecked Sendable` so a reference can be handed to that queue.
 public final class ActivityMonitor: @unchecked Sendable {
+    /// How often the timer re-evaluates whether the active session went idle.
+    private static let idleCheckInterval: TimeInterval = 10
+
     private enum State {
         case idle
         case active
@@ -72,7 +75,10 @@ public final class ActivityMonitor: @unchecked Sendable {
 
     public func start() {
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 10, repeating: 10)
+        timer.schedule(
+            deadline: .now() + Self.idleCheckInterval,
+            repeating: Self.idleCheckInterval
+        )
         timer.setEventHandler { [weak self] in
             self?.checkIdle()
         }

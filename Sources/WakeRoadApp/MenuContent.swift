@@ -7,8 +7,8 @@ struct MenuContent: View {
         if let error = controller.startupError {
             Text(error)
         } else {
-            Text(controller.statusLine)
-            if let trigger = controller.lastTriggerLine {
+            Text(StatusPresentation.statusLine(for: controller.status))
+            if let trigger = StatusPresentation.lastTriggerLine(for: controller.status) {
                 Text(trigger)
             }
             Divider()

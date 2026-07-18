@@ -5,6 +5,9 @@ import Foundation
 /// files matching `fileExtensions`. Events are delivered on the queue passed
 /// to `init`.
 public final class FileActivityWatcher {
+    /// FSEvents coalescing latency: writes within this window arrive as one batch.
+    private static let eventLatency: CFTimeInterval = 1.5
+
     public enum WatcherError: Error, CustomStringConvertible {
         case streamCreationFailed
         case streamStartFailed
@@ -68,7 +71,7 @@ public final class FileActivityWatcher {
             &context,
             roots as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            1.5,
+            Self.eventLatency,
             flags
         ) else {
             throw WatcherError.streamCreationFailed

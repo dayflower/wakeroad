@@ -15,7 +15,10 @@ struct WakeRoadApp: App {
         MenuBarExtra {
             MenuContent(controller: controller)
         } label: {
-            Image(systemName: controller.iconName)
+            Image(systemName: StatusPresentation.iconName(
+                status: controller.status,
+                hasStartupError: controller.startupError != nil
+            ))
         }
         .menuBarExtraStyle(.menu)
     }
