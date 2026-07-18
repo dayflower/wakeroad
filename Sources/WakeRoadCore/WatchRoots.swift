@@ -2,13 +2,9 @@ import Foundation
 
 /// Resolves the directory trees to watch for transcript writes.
 public enum WatchRoots {
-    /// Default transcript locations of Claude Code and Codex.
+    /// Default transcript locations of the known agents.
     public static func defaultRoots() -> [String] {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return [
-            home + "/.claude/projects",
-            home + "/.codex/sessions",
-        ]
+        Agent.known.map(\.root)
     }
 
     /// Combines the default roots with `extra` (tilde-expanded) and drops

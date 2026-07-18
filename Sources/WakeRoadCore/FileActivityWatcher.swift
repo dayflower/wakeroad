@@ -2,7 +2,8 @@ import CoreServices
 import Foundation
 
 /// Watches directory trees with a single FSEventStream and reports writes to
-/// `.jsonl` files. Events are delivered on the queue passed to `init`.
+/// files matching `fileExtensions`. Events are delivered on the queue passed
+/// to `init`.
 public final class FileActivityWatcher {
     public enum WatcherError: Error, CustomStringConvertible {
         case streamCreationFailed
@@ -17,12 +18,19 @@ public final class FileActivityWatcher {
     }
 
     private let roots: [String]
+    private let fileExtensions: Set<String>
     private let queue: DispatchQueue
     private let onEvent: (String) -> Void
     private var stream: FSEventStreamRef?
 
-    public init(roots: [String], queue: DispatchQueue, onEvent: @escaping (String) -> Void) {
+    public init(
+        roots: [String],
+        fileExtensions: Set<String> = Agent.transcriptExtensions,
+        queue: DispatchQueue,
+        onEvent: @escaping (String) -> Void
+    ) {
         self.roots = roots
+        self.fileExtensions = fileExtensions
         self.queue = queue
         self.onEvent = onEvent
     }
@@ -42,7 +50,9 @@ public final class FileActivityWatcher {
             // kFSEventStreamCreateFlagUseCFTypes makes eventPaths a CFArray of CFString.
             let paths = unsafeBitCast(eventPaths, to: NSArray.self)
             for index in 0..<numEvents {
-                guard let path = paths[index] as? String, path.hasSuffix(".jsonl") else { continue }
+                guard let path = paths[index] as? String,
+                      watcher.fileExtensions.contains((path as NSString).pathExtension)
+                else { continue }
                 watcher.onEvent(path)
             }
         }

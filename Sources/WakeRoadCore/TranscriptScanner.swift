@@ -15,9 +15,12 @@ public struct TranscriptWrite: Sendable {
 /// running before launch. Kept out of `ActivityMonitor` so the monitor stays
 /// a pure state machine.
 public enum TranscriptScanner {
-    /// Returns the most recently modified `.jsonl` file under `roots`,
-    /// or nil if none exists.
-    public static func latestWrite(in roots: [String]) -> TranscriptWrite? {
+    /// Returns the most recently modified transcript file (matching
+    /// `extensions`) under `roots`, or nil if none exists.
+    public static func latestWrite(
+        in roots: [String],
+        extensions: Set<String> = Agent.transcriptExtensions
+    ) -> TranscriptWrite? {
         var latest: TranscriptWrite?
         for root in roots {
             let rootURL = URL(fileURLWithPath: root)
@@ -27,7 +30,7 @@ public enum TranscriptScanner {
                 options: [.skipsHiddenFiles]
             ) else { continue }
             for case let fileURL as URL in enumerator {
-                guard fileURL.pathExtension == "jsonl",
+                guard extensions.contains(fileURL.pathExtension),
                       let date = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
                           .contentModificationDate
                 else { continue }

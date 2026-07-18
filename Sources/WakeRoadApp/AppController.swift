@@ -77,7 +77,8 @@ final class AppController: ObservableObject {
         let extra = UserDefaults.standard.stringArray(forKey: DefaultsKey.extraWatchRoots) ?? []
         let roots = WatchRoots.resolve(extra: extra, log: log)
         guard !roots.isEmpty else {
-            startupError = "No watch roots found (expected ~/.claude/projects or ~/.codex/sessions)"
+            let expected = Agent.known.map { "~/" + $0.homeRelativeRoot }.joined(separator: " or ")
+            startupError = "No watch roots found (expected \(expected))"
             return
         }
 
@@ -158,8 +159,7 @@ final class AppController: ObservableObject {
     /// Maps a transcript path to the agent that wrote it; falls back to the
     /// containing directory name for extra watch roots.
     private static func agentName(for path: String) -> String {
-        if path.contains("/.claude/") { return "Claude Code" }
-        if path.contains("/.codex/") { return "Codex" }
+        if let agent = Agent.agent(forTranscriptPath: path) { return agent.name }
         let directory = (abbreviatingHome(path) as NSString).deletingLastPathComponent
         return directory.isEmpty ? path : directory
     }
