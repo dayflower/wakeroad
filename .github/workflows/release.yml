@@ -1,0 +1,84 @@
+name: Release
+
+# When a version-bump PR is merged into main (see scripts/bump-version.sh),
+# the version in Resources/Info.plist changes. This workflow reads that version,
+# and if a matching tag does not yet exist, it tags, builds the .app, and
+# publishes a GitHub Release. On ordinary pushes (version unchanged) it exits
+# early. Using GITHUB_TOKEN only — no PAT needed — since tagging and releasing
+# happen in the same job.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # macos-26 ships Xcode 26 by default, which actool needs to compile the
+    # Icon Composer document (icons/wakeroad.icon).
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Read version and check tag
+        id: version
+        run: |
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing v$VERSION."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.version.outputs.release == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Build app bundle
+        if: steps.version.outputs.release == 'true'
+        run: make app
+
+      - name: Package .app into a zip
+        if: steps.version.outputs.release == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ditto -c -k --sequesterRsrc --keepParent dist/WakeRoad.app "WakeRoad-$VERSION.zip"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "v$VERSION" "WakeRoad-$VERSION.zip" \
+            --title "v$VERSION" \
+            --generate-notes
+
+      - name: Update Homebrew tap
+        if: steps.version.outputs.release == 'true'
+        uses: dayflower/brew-up@3f2a9919dd8b749fef56f762e911d42df31435d4 # v0.1.5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          release-tag: v${{ steps.version.outputs.version }}
+          template-path: .github/homebrew/wakeroad.rb.mustache
+          output-path: Casks/wakeroad.rb
+          asset-map: |
+            default=WakeRoad-{{version}}.zip
+          target-repo: dayflower/homebrew-tap
+          target-branch: main
+          target-repo-token: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
+          publish-mode: pr-auto-merge
+          auto-merge-method: squash

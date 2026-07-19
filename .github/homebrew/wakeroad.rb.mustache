@@ -1,0 +1,20 @@
+cask "wakeroad" do
+  version "{{version}}"
+  sha256 "{{artifact.sha256}}"
+
+  url "{{artifact.url}}",
+      verified: "github.com/dayflower/wakeroad/"
+  name "WakeRoad"
+  desc "Menu bar app that keeps a Mac awake while AI coding agents are working"
+  homepage "https://github.com/dayflower/wakeroad"
+
+  depends_on macos: :ventura
+
+  app "WakeRoad.app"
+
+  caveats <<~EOS
+    This application is signed with an ad-hoc signature.
+    You need to run 'xattr -dr com.apple.quarantine /Applications/WakeRoad.app'
+    after installation to open it.
+  EOS
+end

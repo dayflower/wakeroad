@@ -51,7 +51,22 @@ hook support you haven't set up — that's what wakeroad is for.
 ## Requirements
 
 - macOS 13+
-- Swift toolchain (to build)
+- Swift toolchain (to build from source)
+
+## Install
+
+Install the prebuilt menu bar app with [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask dayflower/tap/wakeroad
+```
+
+The app is distributed with an ad-hoc signature, so after installing you need
+to clear the quarantine attribute before first launch:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/WakeRoad.app
+```
 
 ## Menu bar app
 
