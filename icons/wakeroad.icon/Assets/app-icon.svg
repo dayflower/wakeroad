@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3d4a6d"/>
+      <stop offset="1" stop-color="#1f2740"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe066"/>
+      <stop offset="1" stop-color="#ffb13d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- face plate (from bolt.horizontal.circle.fill) -->
+  <circle cx="512" cy="512" r="460" fill="url(#bg)"/>
+
+  <!-- eyes -->
+  <rect x="304" y="296" width="96" height="188" rx="48" fill="url(#glow)"/>
+  <rect x="624" y="296" width="96" height="188" rx="48" fill="url(#glow)"/>
+
+  <!-- horizontal bolt as mouth -->
+  <path d="M 276 671
+           L 276 770
+           L 457 698
+           L 457 777
+           L 748 609
+           L 528 672
+           L 528 598
+           Z"
+        fill="url(#glow)" stroke="url(#glow)"
+        stroke-width="20" stroke-linejoin="round"/>
+</svg>
