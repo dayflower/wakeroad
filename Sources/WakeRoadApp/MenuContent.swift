@@ -24,10 +24,12 @@ struct MenuContent: View {
             Text("30 min").tag(30)
         }
         Toggle("Keep Display Awake", isOn: $controller.keepDisplayAwake)
-        Toggle("Launch at Login", isOn: Binding(
-            get: { controller.launchAtLogin },
-            set: { controller.setLaunchAtLogin($0) }
-        ))
+        Toggle(
+            "Launch at Login",
+            isOn: Binding(
+                get: { controller.launchAtLogin },
+                set: { controller.setLaunchAtLogin($0) }
+            ))
         Divider()
         Button("Quit WakeRoad") {
             NSApplication.shared.terminate(nil)

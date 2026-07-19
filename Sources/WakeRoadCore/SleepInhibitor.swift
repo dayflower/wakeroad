@@ -56,7 +56,9 @@ public final class SleepInhibitor: SleepInhibiting, @unchecked Sendable {
             &id
         )
         guard result == kIOReturnSuccess else {
-            log("error: failed to create power assertion (IOReturn: 0x\(String(result, radix: 16)))")
+            log(
+                "error: failed to create power assertion (IOReturn: 0x\(String(result, radix: 16)))"
+            )
             return false
         }
         assertionID = id

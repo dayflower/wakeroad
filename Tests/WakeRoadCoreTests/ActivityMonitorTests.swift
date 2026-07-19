@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import WakeRoadCore
 
 /// In-memory stand-in for `SleepInhibitor` that records calls.

@@ -151,11 +151,12 @@ public final class ActivityMonitor: @unchecked Sendable {
     }
 
     private func notifyStatus() {
-        onStatusChange?(MonitorStatus(
-            isActive: state == .active,
-            isSuspended: suspended,
-            lastActivity: lastActivity == .distantPast ? nil : lastActivity,
-            lastTrigger: lastTrigger
-        ))
+        onStatusChange?(
+            MonitorStatus(
+                isActive: state == .active,
+                isSuspended: suspended,
+                lastActivity: lastActivity == .distantPast ? nil : lastActivity,
+                lastTrigger: lastTrigger
+            ))
     }
 }

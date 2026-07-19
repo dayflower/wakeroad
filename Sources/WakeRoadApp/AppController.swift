@@ -82,12 +82,13 @@ final class AppController: ObservableObject {
             return
         }
 
-        let session = WakeRoadSession(configuration: .init(
-            roots: roots,
-            timeout: timeoutSeconds,
-            kind: keepDisplayAwake ? .display : .system,
-            log: log
-        ))
+        let session = WakeRoadSession(
+            configuration: .init(
+                roots: roots,
+                timeout: timeoutSeconds,
+                kind: keepDisplayAwake ? .display : .system,
+                log: log
+            ))
         session.onStatusChange = { [weak self] status in
             Task { @MainActor in
                 self?.status = status

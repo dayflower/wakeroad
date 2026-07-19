@@ -38,10 +38,11 @@ struct Run: ParsableCommand {
     @Flag(help: "Also prevent the display from sleeping.")
     var display = false
 
-    @Option(help: ArgumentHelp(
-        "Additional directory tree to watch (repeatable).",
-        valueName: "path"
-    ))
+    @Option(
+        help: ArgumentHelp(
+            "Additional directory tree to watch (repeatable).",
+            valueName: "path"
+        ))
     var watch: [String] = []
 
     @Flag(help: "Log every matching file event.")
@@ -59,16 +60,18 @@ struct Run: ParsableCommand {
             throw ValidationError("None of the watch roots exist; nothing to watch.")
         }
 
-        let onFileEvent: ((String) -> Void)? = verbose
+        let onFileEvent: ((String) -> Void)? =
+            verbose
             ? { path in log("write: \(abbreviatingHome(path))") }
             : nil
-        let session = WakeRoadSession(configuration: .init(
-            roots: watchRoots,
-            timeout: TimeInterval(timeout),
-            kind: display ? .display : .system,
-            log: log,
-            onFileEvent: onFileEvent
-        ))
+        let session = WakeRoadSession(
+            configuration: .init(
+                roots: watchRoots,
+                timeout: TimeInterval(timeout),
+                kind: display ? .display : .system,
+                log: log,
+                onFileEvent: onFileEvent
+            ))
 
         for root in watchRoots {
             log("watching \(abbreviatingHome(root))")

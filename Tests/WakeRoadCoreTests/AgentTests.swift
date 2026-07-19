@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import WakeRoadCore
 
 final class AgentTests: XCTestCase {
@@ -12,7 +13,8 @@ final class AgentTests: XCTestCase {
             "Claude Code"
         )
         XCTAssertEqual(
-            Agent.agent(forTranscriptPath: home + "/.codex/sessions/2026/07/18/rollout.jsonl")?.name,
+            Agent.agent(forTranscriptPath: home + "/.codex/sessions/2026/07/18/rollout.jsonl")?
+                .name,
             "Codex"
         )
     }

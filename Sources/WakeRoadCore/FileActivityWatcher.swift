@@ -54,7 +54,7 @@ public final class FileActivityWatcher {
             let paths = unsafeBitCast(eventPaths, to: NSArray.self)
             for index in 0..<numEvents {
                 guard let path = paths[index] as? String,
-                      watcher.fileExtensions.contains((path as NSString).pathExtension)
+                    watcher.fileExtensions.contains((path as NSString).pathExtension)
                 else { continue }
                 watcher.onEvent(path)
             }
@@ -65,15 +65,17 @@ public final class FileActivityWatcher {
                 | kFSEventStreamCreateFlagUseCFTypes
                 | kFSEventStreamCreateFlagNoDefer
         )
-        guard let stream = FSEventStreamCreate(
-            kCFAllocatorDefault,
-            callback,
-            &context,
-            roots as CFArray,
-            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            Self.eventLatency,
-            flags
-        ) else {
+        guard
+            let stream = FSEventStreamCreate(
+                kCFAllocatorDefault,
+                callback,
+                &context,
+                roots as CFArray,
+                FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+                Self.eventLatency,
+                flags
+            )
+        else {
             throw WatcherError.streamCreationFailed
         }
 

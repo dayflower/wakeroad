@@ -24,15 +24,17 @@ public enum TranscriptScanner {
         var latest: TranscriptWrite?
         for root in roots {
             let rootURL = URL(fileURLWithPath: root)
-            guard let enumerator = FileManager.default.enumerator(
-                at: rootURL,
-                includingPropertiesForKeys: [.contentModificationDateKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
+            guard
+                let enumerator = FileManager.default.enumerator(
+                    at: rootURL,
+                    includingPropertiesForKeys: [.contentModificationDateKey],
+                    options: [.skipsHiddenFiles]
+                )
+            else { continue }
             for case let fileURL as URL in enumerator {
                 guard extensions.contains(fileURL.pathExtension),
-                      let date = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
-                          .contentModificationDate
+                    let date = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
+                        .contentModificationDate
                 else { continue }
                 if latest == nil || date > latest!.date {
                     latest = TranscriptWrite(path: fileURL.path, date: date)
