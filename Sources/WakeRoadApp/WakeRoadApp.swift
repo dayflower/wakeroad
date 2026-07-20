@@ -22,5 +22,9 @@ struct WakeRoadApp: App {
                 ))
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsView(controller: controller)
+        }
     }
 }

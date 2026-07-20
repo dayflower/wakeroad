@@ -15,12 +15,15 @@ final class AppController: ObservableObject {
     private enum DefaultsKey {
         static let timeoutMinutes = "idleTimeoutMinutes"
         static let keepDisplayAwake = "keepDisplayAwake"
-        static let extraWatchRoots = "extraWatchRoots"
     }
 
     @Published private(set) var status = MonitorStatus()
     @Published private(set) var launchAtLogin = false
     @Published private(set) var startupError: String?
+    /// User-defined watch targets; edited by the settings window.
+    @Published private(set) var customWatchTargets: [CustomWatchTarget]
+    /// Currently active resolved targets, used for status-line name lookup.
+    @Published private(set) var resolvedTargets: [WatchTarget] = []
 
     @Published var timeoutMinutes: Int {
         didSet {
@@ -50,6 +53,7 @@ final class AppController: ObservableObject {
         defaults.register(defaults: [DefaultsKey.timeoutMinutes: 5])
         timeoutMinutes = defaults.integer(forKey: DefaultsKey.timeoutMinutes)
         keepDisplayAwake = defaults.bool(forKey: DefaultsKey.keepDisplayAwake)
+        customWatchTargets = CustomWatchTargetStore.load()
         launchAtLogin = LaunchAtLogin.isEnabled
 
         start()
@@ -67,24 +71,27 @@ final class AppController: ObservableObject {
         }
     }
 
-    private func start() {
-        // Default (notice) level so events show up in `log show` without
-        // enabling info-level persistence.
-        let log: LogHandler = { message in
-            coreLogger.log("\(message, privacy: .public)")
-        }
+    // Default (notice) level so events show up in `log show` without
+    // enabling info-level persistence.
+    private let log: LogHandler = { message in
+        coreLogger.log("\(message, privacy: .public)")
+    }
 
-        let extra = UserDefaults.standard.stringArray(forKey: DefaultsKey.extraWatchRoots) ?? []
-        let roots = WatchRoots.resolve(extra: extra, log: log)
-        guard !roots.isEmpty else {
-            let expected = Agent.known.map { "~/" + $0.homeRelativeRoot }.joined(separator: " or ")
-            startupError = "No watch roots found (expected \(expected))"
+    private func noWatchRootsError() -> String {
+        let expected = Agent.known.map { "~/" + $0.homeRelativeRoot }.joined(separator: " or ")
+        return "No watch roots found (expected \(expected))"
+    }
+
+    private func start() {
+        resolvedTargets = WatchRoots.resolve(custom: customWatchTargets, log: log)
+        guard !resolvedTargets.isEmpty else {
+            startupError = noWatchRootsError()
             return
         }
 
         let session = WakeRoadSession(
             configuration: .init(
-                roots: roots,
+                targets: resolvedTargets,
                 timeout: timeoutSeconds,
                 kind: keepDisplayAwake ? .display : .system,
                 log: log
@@ -101,6 +108,35 @@ final class AppController: ObservableObject {
             return
         }
         self.session = session
+    }
+
+    /// Persists edited custom targets and reconfigures the running watcher so
+    /// changes take effect without a restart.
+    func updateCustomWatchTargets(_ targets: [CustomWatchTarget]) {
+        guard targets != customWatchTargets else { return }
+        customWatchTargets = targets
+        CustomWatchTargetStore.save(targets)
+        reconfigureWatchTargets()
+    }
+
+    private func reconfigureWatchTargets() {
+        resolvedTargets = WatchRoots.resolve(custom: customWatchTargets, log: log)
+        guard !resolvedTargets.isEmpty else {
+            startupError = noWatchRootsError()
+            return
+        }
+        // Start a session lazily if launch failed with no roots; otherwise swap
+        // the watcher in place, preserving any held sleep assertion.
+        guard let session else {
+            start()
+            return
+        }
+        do {
+            try session.reconfigure(targets: resolvedTargets)
+            startupError = nil
+        } catch {
+            startupError = "Failed to update file watcher: \(error)"
+        }
     }
 
     func togglePause() {

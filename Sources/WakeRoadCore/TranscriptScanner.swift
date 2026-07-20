@@ -15,15 +15,12 @@ public struct TranscriptWrite: Sendable {
 /// running before launch. Kept out of `ActivityMonitor` so the monitor stays
 /// a pure state machine.
 public enum TranscriptScanner {
-    /// Returns the most recently modified transcript file (matching
-    /// `extensions`) under `roots`, or nil if none exists.
-    public static func latestWrite(
-        in roots: [String],
-        extensions: Set<String> = Agent.transcriptExtensions
-    ) -> TranscriptWrite? {
+    /// Returns the most recently modified file under any target's root whose
+    /// extension matches that target's extension set, or nil if none exists.
+    public static func latestWrite(in targets: [WatchTarget]) -> TranscriptWrite? {
         var latest: TranscriptWrite?
-        for root in roots {
-            let rootURL = URL(fileURLWithPath: root)
+        for target in targets {
+            let rootURL = URL(fileURLWithPath: target.root)
             guard
                 let enumerator = FileManager.default.enumerator(
                     at: rootURL,
@@ -32,7 +29,7 @@ public enum TranscriptScanner {
                 )
             else { continue }
             for case let fileURL as URL in enumerator {
-                guard extensions.contains(fileURL.pathExtension),
+                guard target.extensions.contains(fileURL.pathExtension.lowercased()),
                     let date = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
                         .contentModificationDate
                 else { continue }

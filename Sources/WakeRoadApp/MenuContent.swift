@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct MenuContent: View {
@@ -8,7 +9,9 @@ struct MenuContent: View {
             Text(error)
         } else {
             Text(StatusPresentation.statusLine(for: controller.status))
-            if let trigger = StatusPresentation.lastTriggerLine(for: controller.status) {
+            if let trigger = StatusPresentation.lastTriggerLine(
+                for: controller.status, targets: controller.resolvedTargets)
+            {
                 Text(trigger)
             }
             Divider()
@@ -31,6 +34,11 @@ struct MenuContent: View {
                 set: { controller.setLaunchAtLogin($0) }
             ))
         Divider()
+        Button("Settings…") {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+        .keyboardShortcut(",")
         Button("Quit WakeRoad") {
             NSApplication.shared.terminate(nil)
         }

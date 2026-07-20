@@ -6,8 +6,8 @@ import Foundation
 /// is enforced here instead of leaking to callers.
 public final class WakeRoadSession: @unchecked Sendable {
     public struct Configuration {
-        /// Directory trees to watch (see `WatchRoots.resolve`).
-        public var roots: [String]
+        /// Watch targets: roots plus per-root extensions (see `WatchRoots`).
+        public var targets: [WatchTarget]
         /// Seconds without writes before the assertion is released.
         public var timeout: TimeInterval
         /// Which kind of sleep to inhibit while active.
@@ -18,13 +18,13 @@ public final class WakeRoadSession: @unchecked Sendable {
         public var onFileEvent: ((String) -> Void)?
 
         public init(
-            roots: [String],
+            targets: [WatchTarget],
             timeout: TimeInterval,
             kind: SleepInhibitor.Kind,
             log: @escaping LogHandler = { _ in },
             onFileEvent: ((String) -> Void)? = nil
         ) {
-            self.roots = roots
+            self.targets = targets
             self.timeout = timeout
             self.kind = kind
             self.log = log
@@ -39,11 +39,12 @@ public final class WakeRoadSession: @unchecked Sendable {
         set { monitor.onStatusChange = newValue }
     }
 
-    private let roots: [String]
+    private var targets: [WatchTarget]
     private let queue: DispatchQueue
     private let inhibitor: SleepInhibitor
     private let monitor: ActivityMonitor
-    private let watcher: FileActivityWatcher
+    private let onFileEvent: ((String) -> Void)?
+    private var watcher: FileActivityWatcher
 
     public init(configuration: Configuration) {
         let queue = DispatchQueue(label: "com.github.dayflower.wakeroad.session")
@@ -55,11 +56,12 @@ public final class WakeRoadSession: @unchecked Sendable {
             log: configuration.log
         )
         let onFileEvent = configuration.onFileEvent
-        self.roots = configuration.roots
+        self.targets = configuration.targets
         self.queue = queue
         self.inhibitor = inhibitor
         self.monitor = monitor
-        self.watcher = FileActivityWatcher(roots: configuration.roots, queue: queue) { path in
+        self.onFileEvent = onFileEvent
+        self.watcher = FileActivityWatcher(targets: configuration.targets, queue: queue) { path in
             onFileEvent?(path)
             monitor.recordActivity(path: path)
         }
@@ -69,7 +71,7 @@ public final class WakeRoadSession: @unchecked Sendable {
     /// timer, and starts the file watcher. If the watcher fails to start the
     /// monitor is rolled back and the error is rethrown.
     public func start() throws {
-        monitor.bootstrap(latestWrite: TranscriptScanner.latestWrite(in: roots))
+        monitor.bootstrap(latestWrite: TranscriptScanner.latestWrite(in: targets))
         monitor.start()
         do {
             try watcher.start()
@@ -77,6 +79,24 @@ public final class WakeRoadSession: @unchecked Sendable {
             queue.sync { monitor.stop() }
             throw error
         }
+    }
+
+    /// Replaces the set of watch targets at runtime by swapping in a fresh
+    /// watcher, leaving the monitor and inhibitor untouched so a currently held
+    /// sleep assertion and the active/idle state survive. A target added while
+    /// something is already writing to it is only picked up on its next write;
+    /// the reconfiguration does not re-scan for pre-existing activity.
+    public func reconfigure(targets: [WatchTarget]) throws {
+        let onFileEvent = self.onFileEvent
+        let monitor = self.monitor
+        let newWatcher = FileActivityWatcher(targets: targets, queue: queue) { path in
+            onFileEvent?(path)
+            monitor.recordActivity(path: path)
+        }
+        try newWatcher.start()
+        queue.sync { self.watcher.stop() }
+        self.watcher = newWatcher
+        self.targets = targets
     }
 
     /// Stops the watcher and monitor, releasing any held assertion.

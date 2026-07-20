@@ -1,9 +1,9 @@
 import CoreServices
 import Foundation
 
-/// Watches directory trees with a single FSEventStream and reports writes to
-/// files matching `fileExtensions`. Events are delivered on the queue passed
-/// to `init`.
+/// Watches the roots of `targets` with a single FSEventStream and reports
+/// writes to files whose extension matches the target containing them. Events
+/// are delivered on the queue passed to `init`.
 public final class FileActivityWatcher {
     /// FSEvents coalescing latency: writes within this window arrive as one batch.
     private static let eventLatency: CFTimeInterval = 1.5
@@ -20,22 +20,28 @@ public final class FileActivityWatcher {
         }
     }
 
+    private let targets: [WatchTarget]
     private let roots: [String]
-    private let fileExtensions: Set<String>
     private let queue: DispatchQueue
     private let onEvent: (String) -> Void
     private var stream: FSEventStreamRef?
 
     public init(
-        roots: [String],
-        fileExtensions: Set<String> = Agent.transcriptExtensions,
+        targets: [WatchTarget],
         queue: DispatchQueue,
         onEvent: @escaping (String) -> Void
     ) {
-        self.roots = roots
-        self.fileExtensions = fileExtensions
+        self.targets = targets
+        self.roots = targets.map(\.root)
         self.queue = queue
         self.onEvent = onEvent
+    }
+
+    /// Whether `path` is a write we should report: its extension matches the
+    /// extension set of the target whose root contains it.
+    private func matches(_ path: String) -> Bool {
+        guard let target = WatchTarget.matching(path: path, in: targets) else { return false }
+        return target.extensions.contains((path as NSString).pathExtension.lowercased())
     }
 
     public func start() throws {
@@ -53,8 +59,7 @@ public final class FileActivityWatcher {
             // kFSEventStreamCreateFlagUseCFTypes makes eventPaths a CFArray of CFString.
             let paths = unsafeBitCast(eventPaths, to: NSArray.self)
             for index in 0..<numEvents {
-                guard let path = paths[index] as? String,
-                    watcher.fileExtensions.contains((path as NSString).pathExtension)
+                guard let path = paths[index] as? String, watcher.matches(path)
                 else { continue }
                 watcher.onEvent(path)
             }

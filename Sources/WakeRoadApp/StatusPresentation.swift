@@ -15,9 +15,9 @@ enum StatusPresentation {
         return status.isActive ? "● Active — inhibiting sleep" : "○ Idle"
     }
 
-    static func lastTriggerLine(for status: MonitorStatus) -> String? {
+    static func lastTriggerLine(for status: MonitorStatus, targets: [WatchTarget]) -> String? {
         guard let trigger = status.lastTrigger else { return nil }
-        var line = "last: " + agentName(for: trigger)
+        var line = "last: " + targetName(for: trigger, in: targets)
         if let date = status.lastActivity {
             line += " (" + timeFormatter.string(from: date) + ")"
         }
@@ -30,10 +30,10 @@ enum StatusPresentation {
         return formatter
     }()
 
-    /// Maps a transcript path to the agent that wrote it; falls back to the
-    /// containing directory name for extra watch roots.
-    private static func agentName(for path: String) -> String {
-        if let agent = Agent.agent(forTranscriptPath: path) { return agent.name }
+    /// Maps a write path to the name of the watch target that contains it;
+    /// falls back to the containing directory name when no target matches.
+    private static func targetName(for path: String, in targets: [WatchTarget]) -> String {
+        if let target = WatchTarget.matching(path: path, in: targets) { return target.name }
         let directory = (abbreviatingHome(path) as NSString).deletingLastPathComponent
         return directory.isEmpty ? path : directory
     }
