@@ -1,18 +1,31 @@
 #!/bin/bash
-# Assembles dist/WakeRoad.app from the SwiftPM release build and ad-hoc signs
-# it. SwiftPM cannot produce .app bundles itself, and SMAppService (launch at
+# Assembles dist/WakeRoad.app from the SwiftPM release build and signs it.
+# SwiftPM cannot produce .app bundles itself, and SMAppService (launch at
 # login) only works from a proper bundle.
+#
+# The wakeroad CLI ships inside the bundle too, so a single notarized and
+# stapled artifact covers both; the Homebrew cask links it onto the PATH.
+#
+# Signing uses CODESIGN_IDENTITY when set (see the sign() helper below) and
+# falls back to an ad-hoc signature otherwise.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# --product takes a single value, so build the two products separately. They
+# land in the same bin path.
 swift build -c release --product WakeRoadApp
+swift build -c release --product wakeroad
 bin_path="$(swift build -c release --product WakeRoadApp --show-bin-path)"
 
 app="dist/WakeRoad.app"
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
 cp "$bin_path/WakeRoadApp" "$app/Contents/MacOS/WakeRoad"
+# Contents/Helpers rather than Contents/MacOS: macOS filesystems are normally
+# case-insensitive, so "wakeroad" next to "WakeRoad" would clobber the app's own
+# executable. Helpers is an allowed nested-code location too.
+cp "$bin_path/wakeroad" "$app/Contents/Helpers/wakeroad"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 
 # The app icon is an Icon Composer document (icons/wakeroad.icon). Pass it to
@@ -62,6 +75,27 @@ fi
 /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$app/Contents/Info.plist" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$app/Contents/Info.plist"
 
-codesign --force --sign - "$app"
+# Sign one path with the release identity when CODESIGN_IDENTITY is set, adding
+# the hardened runtime and secure timestamp that notarization requires. Without
+# it, fall back to an ad-hoc signature, which is enough to run on the build
+# machine. CODESIGN_KEYCHAIN narrows where the identity is looked up, for CI
+# runs that import the certificate into a throwaway keychain.
+sign() {
+	if [ -n "${CODESIGN_IDENTITY:-}" ]; then
+		local args=(--force --options runtime --timestamp --sign "$CODESIGN_IDENTITY")
+		if [ -n "${CODESIGN_KEYCHAIN:-}" ]; then
+			args+=(--keychain "$CODESIGN_KEYCHAIN")
+		fi
+		codesign "${args[@]}" "$1"
+	else
+		codesign --force --sign - "$1"
+	fi
+}
+
+# The bundled CLI is nested code, so it has to be signed before the bundle that
+# seals it.
+sign "$app/Contents/Helpers/wakeroad"
+sign "$app"
+codesign --verify --strict --verbose=2 "$app"
 
 echo "built $app"

@@ -49,17 +49,46 @@ set up — that's what wakeroad is for.
 
 ## Install
 
-Install the prebuilt menu bar app with [Homebrew](https://brew.sh):
+The `wakeroad` [CLI](#cli) ships inside the app bundle, so either of the
+prebuilt options below gives you both.
+
+### Homebrew
 
 ```sh
 brew install --cask dayflower/tap/wakeroad
 ```
 
-The app is distributed with an ad-hoc signature, so after installing you need
-to clear the quarantine attribute before first launch:
+The cask installs the menu bar app and links the CLI onto your PATH.
+
+### Download from Releases
+
+Download the zip from
+[Releases](https://github.com/dayflower/wakeroad/releases) and move
+`WakeRoad.app` into `/Applications`. To use the bundled CLI, link it onto your
+PATH:
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/WakeRoad.app
+ln -s /Applications/WakeRoad.app/Contents/Helpers/wakeroad /usr/local/bin/wakeroad
+```
+
+### Build from source
+
+```console
+$ ./scripts/make-app.sh
+$ cp -R dist/WakeRoad.app /Applications/
+```
+
+The bundle is ad-hoc signed, which is enough to run on the machine that built
+it. Set `CODESIGN_IDENTITY` to a Developer ID Application identity to sign it
+for real instead. "Launch at Login" uses `SMAppService`, which only works
+when the app is launched from a proper `.app` bundle — run it from
+`/Applications` (or wherever you copied it), not via `swift run WakeRoadApp`.
+
+For the CLI on its own, no bundle is needed:
+
+```console
+$ swift build -c release
+$ cp .build/release/wakeroad /usr/local/bin/   # or anywhere on your PATH
 ```
 
 ## Menu bar app
@@ -75,18 +104,6 @@ sleep is inhibited), and the menu lets you:
 - Toggle "Keep Display Awake"
 - Toggle "Launch at Login"
 - Open **Settings…** to manage watch targets
-
-### Build and install
-
-```console
-$ ./scripts/make-app.sh
-$ cp -R dist/WakeRoad.app /Applications/
-```
-
-The bundle is ad-hoc signed; it is meant for building on your own machine,
-not for distribution. "Launch at Login" uses `SMAppService`, which only works
-when the app is launched from a proper `.app` bundle — run it from
-`/Applications` (or wherever you copied it), not via `swift run WakeRoadApp`.
 
 ### Settings
 
@@ -105,14 +122,7 @@ targets automatically on first launch.
 ## CLI
 
 If you prefer a terminal, the same watcher is available as a foreground
-command-line tool.
-
-### Build
-
-```console
-$ swift build -c release
-$ cp .build/release/wakeroad /usr/local/bin/   # or anywhere on your PATH
-```
+command-line tool. It comes with the app — see [Install](#install).
 
 ### Usage
 

@@ -2,10 +2,18 @@ name: Release
 
 # When a version-bump PR is merged into main (see scripts/bump-version.sh),
 # the version in Resources/Info.plist changes. This workflow reads that version,
-# and if a matching tag does not yet exist, it tags, builds the .app, and
-# publishes a GitHub Release. On ordinary pushes (version unchanged) it exits
-# early. Using GITHUB_TOKEN only — no PAT needed — since tagging and releasing
-# happen in the same job.
+# and if a matching tag does not yet exist, it tags, builds the .app, signs it
+# with a Developer ID certificate, notarizes and staples it, and publishes a
+# GitHub Release. On ordinary pushes (version unchanged) it exits early. Using
+# GITHUB_TOKEN only — no PAT needed — since tagging and releasing happen in the
+# same job.
+#
+# Signing and notarization need these repository secrets:
+#   MACOS_CERTIFICATE_P12       base64 of the Developer ID Application .p12
+#   MACOS_CERTIFICATE_PASSWORD  password of that .p12
+#   APPLE_API_KEY_ID            App Store Connect API key id
+#   APPLE_API_ISSUER_ID         App Store Connect issuer id
+#   APPLE_API_KEY_P8            base64 of the AuthKey_*.p8 private key
 
 on:
   push:
@@ -46,9 +54,53 @@ jobs:
           git tag "v$VERSION"
           git push origin "v$VERSION"
 
+      # The action creates a throwaway keychain and removes it again in its post
+      # step, so nothing has to be cleaned up by hand.
+      - name: Import Developer ID certificate
+        if: steps.version.outputs.release == 'true'
+        uses: Apple-Actions/import-codesign-certs@b610f78488812c1e56b20e6df63ec42d833f2d14 # v6.0.0
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+
+      # Pass the identity to make-app.sh by its SHA-1 hash so the certificate's
+      # common name never has to be hardcoded. The keychain was just created, so
+      # it holds exactly one Developer ID Application identity.
+      - name: Resolve signing identity
+        if: steps.version.outputs.release == 'true'
+        run: |
+          keychain="$RUNNER_TEMP/signing_temp.keychain-db"
+          identity="$(security find-identity -v -p codesigning "$keychain" \
+            | awk '/Developer ID Application/ { print $2; exit }')"
+          if [ -z "$identity" ]; then
+            echo "No Developer ID Application identity in $keychain" >&2
+            security find-identity -v -p codesigning "$keychain" >&2
+            exit 1
+          fi
+          echo "CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "CODESIGN_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
       - name: Build app bundle
         if: steps.version.outputs.release == 'true'
         run: make app
+
+      # Stapling writes the ticket into the bundle, so this has to happen before
+      # the distributed zip is created.
+      - name: Notarize and staple
+        if: steps.version.outputs.release == 'true'
+        env:
+          NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          NOTARY_KEY_BASE64: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          NOTARY_KEY_PATH="$RUNNER_TEMP/notary-key.p8"
+          export NOTARY_KEY_PATH
+          printf '%s' "$NOTARY_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+          ./scripts/notarize-app.sh
+
+      - name: Remove notarization key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/notary-key.p8"
 
       - name: Package .app into a zip
         if: steps.version.outputs.release == 'true'

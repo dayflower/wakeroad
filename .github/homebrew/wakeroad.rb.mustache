@@ -11,10 +11,5 @@ cask "wakeroad" do
   depends_on macos: :ventura
 
   app "WakeRoad.app"
-
-  caveats <<~EOS
-    This application is signed with an ad-hoc signature.
-    You need to run 'xattr -dr com.apple.quarantine /Applications/WakeRoad.app'
-    after installation to open it.
-  EOS
+  binary "#{appdir}/WakeRoad.app/Contents/Helpers/wakeroad"
 end

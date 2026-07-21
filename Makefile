@@ -3,7 +3,7 @@ APP_DIR := dist/$(APP_NAME).app
 INSTALL_DIR := /Applications
 SWIFT_SOURCES := Sources Tests
 
-.PHONY: build test app install clean format check
+.PHONY: build test app notarize install clean format check
 
 build:
 	swift build -c release
@@ -19,6 +19,9 @@ check:
 
 app:
 	./scripts/make-app.sh
+
+notarize: app
+	./scripts/notarize-app.sh
 
 install: app
 	rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"
