@@ -3,8 +3,8 @@
 #
 # The version lives in Resources/Info.plist (CFBundleShortVersionString is the
 # marketing version; CFBundleVersion is a monotonic build number). Merging the
-# resulting PR into main triggers .github/workflows/release.yml, which tags
-# v<version>, builds the .app, and publishes a GitHub Release.
+# resulting PR into main triggers .github/workflows/release.yml, which builds
+# the .app and publishes a GitHub Release tagged v<version>.
 #
 # Usage:
 #   scripts/bump-version.sh <new-version>   # e.g. 0.2.0

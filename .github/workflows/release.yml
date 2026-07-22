@@ -2,11 +2,15 @@ name: Release
 
 # When a version-bump PR is merged into main (see scripts/bump-version.sh),
 # the version in Resources/Info.plist changes. This workflow reads that version,
-# and if a matching tag does not yet exist, it tags, builds the .app, signs it
-# with a Developer ID certificate, notarizes and staples it, and publishes a
-# GitHub Release. On ordinary pushes (version unchanged) it exits early. Using
+# and if a matching tag does not yet exist, it builds the .app, signs it with a
+# Developer ID certificate, notarizes and staples it, and publishes a GitHub
+# Release. On ordinary pushes (version unchanged) it exits early. Using
 # GITHUB_TOKEN only — no PAT needed — since tagging and releasing happen in the
 # same job.
+#
+# The tag is created by `gh release create` at the very end rather than up
+# front, so a failure part-way through leaves no tag behind and the run can
+# simply be retried.
 #
 # Signing and notarization need these repository secrets:
 #   MACOS_CERTIFICATE_P12       base64 of the Developer ID Application .p12
@@ -45,15 +49,6 @@ jobs:
             echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and push tag
-        if: steps.version.outputs.release == 'true'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
-
       # The action creates a throwaway keychain and removes it again in its post
       # step, so nothing has to be cleaned up by hand.
       - name: Import Developer ID certificate
@@ -64,21 +59,21 @@ jobs:
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
 
       # Pass the identity to make-app.sh by its SHA-1 hash so the certificate's
-      # common name never has to be hardcoded. The keychain was just created, so
-      # it holds exactly one Developer ID Application identity.
+      # common name never has to be hardcoded. The action put its keychain on the
+      # search list, so search that rather than guessing where the file lives;
+      # the runner's own login keychain holds no signing identities.
       - name: Resolve signing identity
         if: steps.version.outputs.release == 'true'
         run: |
-          keychain="$RUNNER_TEMP/signing_temp.keychain-db"
-          identity="$(security find-identity -v -p codesigning "$keychain" \
+          identity="$(security find-identity -v -p codesigning \
             | awk '/Developer ID Application/ { print $2; exit }')"
           if [ -z "$identity" ]; then
-            echo "No Developer ID Application identity in $keychain" >&2
-            security find-identity -v -p codesigning "$keychain" >&2
+            echo "No Developer ID Application identity on the keychain search list" >&2
+            security list-keychains >&2
+            security find-identity -v -p codesigning >&2
             exit 1
           fi
           echo "CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
-          echo "CODESIGN_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
 
       - name: Build app bundle
         if: steps.version.outputs.release == 'true'
@@ -108,6 +103,8 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           ditto -c -k --sequesterRsrc --keepParent dist/WakeRoad.app "WakeRoad-$VERSION.zip"
 
+      # --target tags the commit being released, so no separate tagging step is
+      # needed and nothing is tagged unless the build got this far.
       - name: Create GitHub Release
         if: steps.version.outputs.release == 'true'
         env:
@@ -115,6 +112,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           gh release create "v$VERSION" "WakeRoad-$VERSION.zip" \
+            --target "$GITHUB_SHA" \
             --title "v$VERSION" \
             --generate-notes
 

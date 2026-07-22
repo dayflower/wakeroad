@@ -78,15 +78,11 @@ fi
 # Sign one path with the release identity when CODESIGN_IDENTITY is set, adding
 # the hardened runtime and secure timestamp that notarization requires. Without
 # it, fall back to an ad-hoc signature, which is enough to run on the build
-# machine. CODESIGN_KEYCHAIN narrows where the identity is looked up, for CI
-# runs that import the certificate into a throwaway keychain.
+# machine. The identity is looked up on the keychain search list.
 sign() {
 	if [ -n "${CODESIGN_IDENTITY:-}" ]; then
-		local args=(--force --options runtime --timestamp --sign "$CODESIGN_IDENTITY")
-		if [ -n "${CODESIGN_KEYCHAIN:-}" ]; then
-			args+=(--keychain "$CODESIGN_KEYCHAIN")
-		fi
-		codesign "${args[@]}" "$1"
+		codesign --force --options runtime --timestamp \
+			--sign "$CODESIGN_IDENTITY" "$1"
 	else
 		codesign --force --sign - "$1"
 	fi
