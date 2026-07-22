@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WakeRoadCore
@@ -50,7 +51,12 @@ struct SettingsView: View {
         }
         .padding(20)
         .frame(width: 480, height: 380)
-        .onAppear { rows = controller.customWatchTargets }
+        .onAppear {
+            rows = controller.customWatchTargets
+            // As an accessory app we are never the active app, so the freshly
+            // opened window would otherwise sit behind the frontmost one.
+            NSApp.activate(ignoringOtherApps: true)
+        }
         .onChange(of: rows) { controller.updateCustomWatchTargets($0) }
         .fileImporter(
             isPresented: importerBinding,
