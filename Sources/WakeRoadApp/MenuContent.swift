@@ -35,10 +35,25 @@ struct MenuContent: View {
             ))
         Divider()
         settingsButton
+        Divider()
+        Text(Self.appNameAndVersion)
+        Divider()
         Button("Quit WakeRoad") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    /// Bundle name and short version, e.g. `WakeRoad 0.2.1`. Falls back to the
+    /// literal name when the app is run outside a bundle (unit tests, previews).
+    private static var appNameAndVersion: String {
+        let info = Bundle.main.infoDictionary
+        let name =
+            (info?["CFBundleName"] as? String)
+            ?? (info?["CFBundleDisplayName"] as? String)
+            ?? "WakeRoad"
+        let version = info?["CFBundleShortVersionString"] as? String
+        return version.map { "\(name) \($0)" } ?? name
     }
 
     /// `SettingsLink` is the only supported way to open the Settings scene:
