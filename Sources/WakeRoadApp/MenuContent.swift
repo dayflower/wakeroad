@@ -34,14 +34,30 @@ struct MenuContent: View {
                 set: { controller.setLaunchAtLogin($0) }
             ))
         Divider()
-        Button("Settings…") {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        }
-        .keyboardShortcut(",")
+        settingsButton
         Button("Quit WakeRoad") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    /// `SettingsLink` is the only supported way to open the Settings scene:
+    /// the older `showSettingsWindow:` private selector stopped working in
+    /// macOS 14. Activation is handled by `SettingsView` itself, since the link
+    /// gives us no hook to run alongside it.
+    @ViewBuilder
+    private var settingsButton: some View {
+        if #available(macOS 14, *) {
+            SettingsLink {
+                Text("Settings…")
+            }
+            .keyboardShortcut(",")
+        } else {
+            Button("Settings…") {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
+            .keyboardShortcut(",")
+        }
     }
 }

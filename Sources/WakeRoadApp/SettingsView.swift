@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WakeRoadCore
@@ -11,46 +12,59 @@ struct SettingsView: View {
     @State private var importingRowID: CustomWatchTarget.ID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Watch Targets")
-                .font(.headline)
-            Text(
-                "The Mac stays awake while files with the given extensions change "
-                    + "under each directory. Claude Code and Codex are set up by "
-                    + "default; edit or remove them like any other. Changes apply "
-                    + "immediately."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Watch Targets")
+                    .font(.headline)
+                Text(
+                    "The Mac stays awake while files with the given extensions change "
+                        + "under each directory. Claude Code and Codex are set up by "
+                        + "default; edit or remove them like any other. Changes apply "
+                        + "immediately."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-            if rows.isEmpty {
-                Text("No watch targets. Click Add to watch a directory.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-            } else {
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach($rows) { $row in
-                            targetRow($row)
+                if rows.isEmpty {
+                    Text("No watch targets. Click Add to watch a directory.")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            ForEach($rows) { $row in
+                                targetRow($row)
+                                    .id($row.wrappedValue.id)
+                            }
                         }
                     }
                 }
-            }
 
-            HStack {
-                Button {
-                    rows.append(
-                        CustomWatchTarget(name: "", path: "", extensionsRaw: ""))
-                } label: {
-                    Label("Add", systemImage: "plus")
+                HStack {
+                    Button {
+                        let added = CustomWatchTarget(name: "", path: "", extensionsRaw: "")
+                        rows.append(added)
+                        // The new row has no geometry until SwiftUI lays this
+                        // update out, so scrolling has to wait a turn.
+                        DispatchQueue.main.async {
+                            withAnimation { proxy.scrollTo(added.id, anchor: .bottom) }
+                        }
+                    } label: {
+                        Label("Add", systemImage: "plus")
+                    }
+                    Spacer()
                 }
-                Spacer()
             }
         }
         .padding(20)
         .frame(width: 480, height: 380)
-        .onAppear { rows = controller.customWatchTargets }
+        .onAppear {
+            rows = controller.customWatchTargets
+            // As an accessory app we are never the active app, so the freshly
+            // opened window would otherwise sit behind the frontmost one.
+            NSApp.activate(ignoringOtherApps: true)
+        }
         .onChange(of: rows) { controller.updateCustomWatchTargets($0) }
         .fileImporter(
             isPresented: importerBinding,
